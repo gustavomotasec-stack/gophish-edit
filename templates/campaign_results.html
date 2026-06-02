@@ -18,11 +18,20 @@
                     <i class="fa fa-caret-down"></i>
                 </button>
                 <ul class="dropdown-menu" aria-labelledby="exportButton">
+                    <li class="dropdown-header">Email</li>
                     <li>
                         <a href="#" onclick="exportAsCSV('results')">Results</a>
                     </li>
                     <li>
                         <a href="#" onclick="exportAsCSV('events')">Raw Events</a>
+                    </li>
+                    <li class="divider"></li>
+                    <li class="dropdown-header"><i class="fa fa-whatsapp"></i> WhatsApp</li>
+                    <li>
+                        <a href="#" onclick="exportAsCSV('whatsapp_results')">WhatsApp Results</a>
+                    </li>
+                    <li>
+                        <a href="#" onclick="exportAsCSV('whatsapp_events')">WhatsApp Events</a>
                     </li>
                 </ul>
             </div>
@@ -34,6 +43,9 @@
             </button>
             <button id="refresh_btn" type="button" class="btn btn-blue" data-toggle="tooltip" onclick="refresh()">
                 <i class="fa fa-refresh fa-lg"></i> Refresh
+            </button>
+            <button id="whatsapp_btn" type="button" class="btn btn-success" data-toggle="modal" data-target="#whatsappModal">
+                <i class="fa fa-whatsapp fa-lg"></i> Gerar Links WhatsApp
             </button>
             <span id="refresh_message">
                 <i class="fa fa-spin fa-spinner"></i> Refreshing
@@ -47,6 +59,15 @@
                         <div id="timeline_chart"></div>
                     </div>
                 </div>
+                <!-- Email Charts -->
+                <div class="row">
+                    <div class="col-lg-12" style="padding:0 15px 4px;">
+                        <small class="text-muted" style="font-weight:600; letter-spacing:1px; text-transform:uppercase;">
+                            <i class="fa fa-envelope"></i> Email
+                        </small>
+                        <hr style="margin:4px 0 0;">
+                    </div>
+                </div>
                 <div class="row">
                     <div style="height:200px;" class="col-lg-1 col-md-1"></div>
                     <div id="sent_chart" style="height:200px;" class="col-lg-2 col-md-2"></div>
@@ -55,6 +76,24 @@
                     <div id="submitted_data_chart" style="height:200px;" class="col-lg-2 col-md-2"></div>
                     <div id="reported_chart" style="height:200px;" class="col-lg-2 col-md-2"></div>
                     <div style="height:200px;" class="col-lg-1 col-md-1"></div>
+                </div>
+                <!-- WhatsApp Charts -->
+                <div class="row">
+                    <div class="col-lg-12" style="padding:0 15px 4px;">
+                        <small class="text-muted" style="font-weight:600; letter-spacing:1px; text-transform:uppercase;">
+                            <i class="fa fa-whatsapp"></i> WhatsApp
+                        </small>
+                        <hr style="margin:4px 0 0;">
+                    </div>
+                </div>
+                <div class="row">
+                    <div style="height:200px;" class="col-lg-2 col-md-2"></div>
+                    <div id="wa_generated_chart"  style="height:200px;" class="col-lg-2 col-md-2"></div>
+                    <div style="height:200px;" class="col-lg-1 col-md-1"></div>
+                    <div id="wa_clicked_chart"    style="height:200px;" class="col-lg-2 col-md-2"></div>
+                    <div style="height:200px;" class="col-lg-1 col-md-1"></div>
+                    <div id="wa_submitted_chart"  style="height:200px;" class="col-lg-2 col-md-2"></div>
+                    <div style="height:200px;" class="col-lg-2 col-md-2"></div>
                 </div>
                 <div class="row" id="resultsMapContainer">
                     <div class="col-md-6">
@@ -66,25 +105,96 @@
         </div>
         <div class="row">
             <h2>Details</h2>
-            <table id="resultsTable" class="table">
-                <thead>
-                    <tr>
-                        <th>Result ID</th>
-                        <th class="no-sort"></th>
-                        <th>First Name</th>
-                        <th>Last Name</th>
-                        <th>Email</th>
-                        <th>Position</th>
-                        <th>Status</th>
-                        <th class="text-center">Reported</th>
-                    </tr>
-                </thead>
-                <tbody>
-                </tbody>
-            </table>
+            <ul class="nav nav-tabs" id="resultsTabs">
+                <li class="active"><a href="#tab-email" data-toggle="tab">Email</a></li>
+                <li><a href="#tab-whatsapp" data-toggle="tab"><i class="fa fa-whatsapp"></i> WhatsApp</a></li>
+            </ul>
+            <div class="tab-content" style="padding-top:15px;">
+                <div class="tab-pane active" id="tab-email">
+                    <table id="resultsTable" class="table">
+                        <thead>
+                            <tr>
+                                <th>Result ID</th>
+                                <th class="no-sort"></th>
+                                <th>First Name</th>
+                                <th>Last Name</th>
+                                <th>Email</th>
+                                <th>Position</th>
+                                <th>Status</th>
+                                <th class="text-center">Reported</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="tab-pane" id="tab-whatsapp">
+                    <!-- WhatsApp Results Table -->
+                    <table id="whatsappResultsTable" class="table">
+                        <thead>
+                            <tr>
+                                <th>Result ID</th>
+                                <th class="no-sort"></th>
+                                <th>Nome</th>
+                                <th>Status</th>
+                                <th class="text-center">Reported</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     </div>
     <div id="flashes" class="row"></div>
+</div>
+
+<!-- Modal: Gerar Links WhatsApp -->
+<div class="modal fade" id="whatsappModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+                <h4 class="modal-title"><i class="fa fa-whatsapp"></i> Gerar Links WhatsApp</h4>
+            </div>
+            <div class="modal-body">
+                <div id="whatsapp_modal_alert"></div>
+                <div class="form-group">
+                    <label for="whatsapp_count">Quantidade de links</label>
+                    <input type="number" class="form-control" id="whatsapp_count" min="1" max="1000" value="10" placeholder="Ex: 50">
+                    <p class="help-block">Máximo de 1000 links por geração. Cada link é único e rastreia um usuário individualmente.</p>
+                </div>
+                <div id="whatsapp_links_area" style="display:none;">
+                    <label>Links gerados — copie e distribua pelo WhatsApp:</label>
+                    <div class="row" style="margin-bottom:6px;">
+                        <div class="col-xs-4">
+                            <button type="button" class="btn btn-success btn-block" onclick="copyAllWhatsAppLinks()">
+                                <i class="fa fa-copy"></i> Copiar todos
+                            </button>
+                        </div>
+                        <div class="col-xs-4">
+                            <button type="button" class="btn btn-info btn-block" onclick="shortenAllWhatsAppLinks()">
+                                <i class="fa fa-scissors"></i> Encurtar todos
+                            </button>
+                        </div>
+                        <div class="col-xs-4">
+                            <button type="button" class="btn btn-warning btn-block" onclick="copyAllShortenedLinks()">
+                                <i class="fa fa-copy"></i> Copiar encurtados
+                            </button>
+                        </div>
+                    </div>
+                    <div id="whatsapp_links_list" style="max-height:400px; overflow-y:auto;"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">Fechar</button>
+                <button type="button" id="whatsapp_generate_btn" class="btn btn-primary" onclick="generateWhatsAppLinks()">
+                    <i class="fa fa-bolt"></i> Gerar
+                </button>
+            </div>
+        </div>
+    </div>
 </div>
 {{end}} {{define "scripts"}}
 <script src="/js/dist/app/campaign_results.min.js"></script>

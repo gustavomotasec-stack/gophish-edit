@@ -135,3 +135,36 @@ func (as *Server) CampaignComplete(w http.ResponseWriter, r *http.Request) {
 		JSONResponse(w, models.Response{Success: true, Message: "Campaign completed successfully!"}, http.StatusOK)
 	}
 }
+
+// CampaignWhatsApp generates unique phishing links for WhatsApp distribution.
+// POST /api/campaigns/{id}/whatsapp with body {"count": N}
+func (as *Server) CampaignWhatsApp(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id, _ := strconv.ParseInt(vars["id"], 0, 64)
+	if r.Method != "POST" {
+		JSONResponse(w, models.Response{Success: false, Message: "Method not allowed"}, http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		Count int `json:"count"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Count <= 0 {
+		JSONResponse(w, models.Response{Success: false, Message: "Invalid request: 'count' must be a positive integer"}, http.StatusBadRequest)
+		return
+	}
+	if req.Count > 1000 {
+		JSONResponse(w, models.Response{Success: false, Message: "Maximum of 1000 links per generation"}, http.StatusBadRequest)
+		return
+	}
+	links, err := models.GenerateWhatsAppLinks(id, ctx.Get(r, "user_id").(int64), req.Count)
+	if err != nil {
+		if err == models.ErrCampaignNotInProgress {
+			JSONResponse(w, models.Response{Success: false, Message: err.Error()}, http.StatusBadRequest)
+			return
+		}
+		log.Error(err)
+		JSONResponse(w, models.Response{Success: false, Message: "Error generating links"}, http.StatusInternalServerError)
+		return
+	}
+	JSONResponse(w, links, http.StatusCreated)
+}

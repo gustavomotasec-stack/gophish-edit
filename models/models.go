@@ -18,7 +18,7 @@ import (
 
 	log "github.com/gophish/gophish/logger"
 	"github.com/jinzhu/gorm"
-	_ "github.com/mattn/go-sqlite3" // Blank import needed to import sqlite3
+	gosqlite "github.com/glebarez/go-sqlite"
 )
 
 var db *gorm.DB
@@ -91,7 +91,7 @@ func chooseDBDriver(name, openStr string) goose.DBDriver {
 
 	// Default database is sqlite3
 	default:
-		d.Import = "github.com/mattn/go-sqlite3"
+		d.Import = "github.com/glebarez/go-sqlite"
 		d.Dialect = &goose.Sqlite3Dialect{}
 	}
 
@@ -131,6 +131,8 @@ func createTemporaryPassword(u *User) error {
 // Once the database is up-to-date, we create an admin user (if needed) that
 // has a randomly generated API key and password.
 func Setup(c *config.Config) error {
+	// Register pure Go SQLite driver as "sqlite3" for compatibility
+	gosqlite.RegisterAsSQLITE3()
 	// Setup the package-scoped config
 	conf = c
 	// Setup the goose configuration

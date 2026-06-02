@@ -2,6 +2,7 @@ package models
 
 import (
 	"errors"
+	"fmt"
 	"net/url"
 	"time"
 
@@ -134,12 +135,12 @@ func (c *Campaign) Validate() error {
 	switch {
 	case c.Name == "":
 		return ErrCampaignNameNotSpecified
-	case len(c.Groups) == 0:
-		return ErrGroupNotSpecified
 	case c.Template.Name == "":
 		return ErrTemplateNotSpecified
 	case c.Page.Name == "":
 		return ErrPageNotSpecified
+	case len(c.Groups) == 0:
+		return ErrGroupNotSpecified
 	case c.SMTP.Name == "":
 		return ErrSMTPNotSpecified
 	case !c.SendByDate.IsZero() && !c.LaunchDate.IsZero() && c.SendByDate.Before(c.LaunchDate):
@@ -470,23 +471,6 @@ func PostCampaign(c *Campaign, uid int64) error {
 	if c.LaunchDate.Before(c.CreatedDate) || c.LaunchDate.Equal(c.CreatedDate) {
 		c.Status = CampaignInProgress
 	}
-	// Check to make sure all the groups already exist
-	// Also, later we'll need to know the total number of recipients (counting
-	// duplicates is ok for now), so we'll do that here to save a loop.
-	totalRecipients := 0
-	for i, g := range c.Groups {
-		c.Groups[i], err = GetGroupByName(g.Name, uid)
-		if err == gorm.ErrRecordNotFound {
-			log.WithFields(logrus.Fields{
-				"group": g.Name,
-			}).Error("Group does not exist")
-			return ErrGroupNotFound
-		} else if err != nil {
-			log.Error(err)
-			return err
-		}
-		totalRecipients += len(c.Groups[i].Targets)
-	}
 	// Check to make sure the template exists
 	t, err := GetTemplateByName(c.Template.Name, uid)
 	if err == gorm.ErrRecordNotFound {
@@ -513,6 +497,20 @@ func PostCampaign(c *Campaign, uid int64) error {
 	}
 	c.Page = p
 	c.PageId = p.Id
+	totalRecipients := 0
+	for i, g := range c.Groups {
+		c.Groups[i], err = GetGroupByName(g.Name, uid)
+		if err == gorm.ErrRecordNotFound {
+			log.WithFields(logrus.Fields{
+				"group": g.Name,
+			}).Error("Group does not exist")
+			return ErrGroupNotFound
+		} else if err != nil {
+			log.Error(err)
+			return err
+		}
+		totalRecipients += len(c.Groups[i].Targets)
+	}
 	// Check to make sure the sending profile exists
 	s, err := GetSMTPByName(c.SMTP.Name, uid)
 	if err == gorm.ErrRecordNotFound {
@@ -636,6 +634,86 @@ func DeleteCampaign(id int64) error {
 		log.Error(err)
 	}
 	return err
+}
+
+// ErrCampaignNotInProgress is returned when trying to generate WhatsApp links
+// for a campaign that hasn't been launched yet.
+var ErrCampaignNotInProgress = errors.New("Campaign must be in progress to generate WhatsApp links")
+
+// WhatsAppLinkResult holds a generated rid and its ready-to-use phishing URL.
+type WhatsAppLinkResult struct {
+	RId  string `json:"rid"`
+	URL  string `json:"url"`
+	Name string `json:"name"`
+}
+
+// GenerateWhatsAppLinks creates count new Result records with source="whatsapp"
+// for the given campaign and returns the list of phishing URLs.
+func GenerateWhatsAppLinks(campaignId, userId int64, count int) ([]WhatsAppLinkResult, error) {
+	c, err := GetCampaign(campaignId, userId)
+	if err != nil {
+		return nil, err
+	}
+	if c.Status != CampaignInProgress {
+		return nil, ErrCampaignNotInProgress
+	}
+
+	// Count existing WhatsApp results to continue the numbering sequence
+	var existingCount int
+	db.Model(&Result{}).Where("campaign_id=? AND source=?", campaignId, "whatsapp").Count(&existingCount)
+
+	now := time.Now().UTC()
+	links := make([]WhatsAppLinkResult, 0, count)
+
+	tx := db.Begin()
+	for i := 0; i < count; i++ {
+		seq := existingCount + i + 1
+		name := fmt.Sprintf("WhatsApp #%d", seq)
+		r := &Result{
+			BaseRecipient: BaseRecipient{
+				Email:     fmt.Sprintf("whatsapp_%d_%d@internal", campaignId, seq),
+				FirstName: name,
+				LastName:  "",
+				Position:  "",
+			},
+			Status:       EventClicked[:0], // empty — will be updated on first click
+			CampaignId:   campaignId,
+			UserId:       userId,
+			SendDate:     now,
+			Reported:     false,
+			ModifiedDate: now,
+			Source:       "whatsapp",
+		}
+		r.Status = "Sending"
+		err = r.GenerateId(tx)
+		if err != nil {
+			tx.Rollback()
+			return nil, err
+		}
+		err = tx.Save(r).Error
+		if err != nil {
+			tx.Rollback()
+			return nil, err
+		}
+
+		// Build the phishing URL: campaign base URL + ?rid=XXXXX
+		phishURL, err := url.Parse(c.URL)
+		if err != nil {
+			tx.Rollback()
+			return nil, err
+		}
+		q := phishURL.Query()
+		q.Set(RecipientParameter, r.RId)
+		phishURL.RawQuery = q.Encode()
+
+		links = append(links, WhatsAppLinkResult{
+			RId:  r.RId,
+			URL:  phishURL.String(),
+			Name: name,
+		})
+	}
+	tx.Commit()
+	return links, nil
 }
 
 // CompleteCampaign effectively "ends" a campaign.

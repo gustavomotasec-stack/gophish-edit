@@ -1,5 +1,6 @@
 var map = null
 var doPoll = true;
+var whatsappTable = null;
 
 // statuses is a helper map to point result statuses to ui classes
 var statuses = {
@@ -206,10 +207,25 @@ function exportAsCSV(scope) {
     var filename = campaign.name + ' - ' + capitalize(scope) + '.csv'
     switch (scope) {
         case "results":
-            csvScope = campaign.results
+            csvScope = campaign.results.filter(function(r) { return r.source !== "whatsapp" })
+            filename = campaign.name + ' - Email Results.csv'
             break;
         case "events":
-            csvScope = campaign.timeline
+            // Email events: filter out events whose email matches a whatsapp result
+            var waEmails = {}
+            campaign.results.forEach(function(r) { if (r.source === "whatsapp") waEmails[r.email] = true })
+            csvScope = campaign.timeline.filter(function(e) { return !waEmails[e.email] })
+            filename = campaign.name + ' - Email Events.csv'
+            break;
+        case "whatsapp_results":
+            csvScope = campaign.results.filter(function(r) { return r.source === "whatsapp" })
+            filename = campaign.name + ' - WhatsApp Results.csv'
+            break;
+        case "whatsapp_events":
+            var waEmailsExp = {}
+            campaign.results.forEach(function(r) { if (r.source === "whatsapp") waEmailsExp[r.email] = true })
+            csvScope = campaign.timeline.filter(function(e) { return waEmailsExp[e.email] })
+            filename = campaign.name + ' - WhatsApp Events.csv'
             break;
     }
     if (!csvScope) {
@@ -652,13 +668,14 @@ function poll() {
             timeline_chart.series[0].update({
                 data: timeline_series_data
             })
-            /* Update the results donut chart */
+            /* Update the results donut chart (email only) */
             var email_series_data = {}
             // Load the initial data
             Object.keys(statusMapping).forEach(function (k) {
                 email_series_data[k] = 0
             });
-            $.each(campaign.results, function (i, result) {
+            var emailResultsPoll = campaign.results.filter(function(r) { return r.source !== "whatsapp" })
+            $.each(emailResultsPoll, function (i, result) {
                 email_series_data[result.status]++;
                 if (result.reported) {
                     email_series_data['Email Reported']++
@@ -669,6 +686,7 @@ function poll() {
                     email_series_data[progressListing[i]]++
                 }
             })
+            var emailTotal = emailResultsPoll.length || 1
             $.each(email_series_data, function (status, count) {
                 var email_data = []
                 if (!(status in statusMapping)) {
@@ -676,12 +694,12 @@ function poll() {
                 }
                 email_data.push({
                     name: status,
-                    y: Math.floor((count / campaign.results.length) * 100),
+                    y: Math.floor((count / emailTotal) * 100),
                     count: count
                 })
                 email_data.push({
                     name: '',
-                    y: 100 - Math.floor((count / campaign.results.length) * 100)
+                    y: 100 - Math.floor((count / emailTotal) * 100)
                 })
                 var chart = $("#" + statusMapping[status] + "_chart").highcharts()
                 chart.series[0].update({
@@ -689,13 +707,14 @@ function poll() {
                 })
             })
 
-            /* Update the datatable */
+            /* Update the email datatable */
             resultsTable = $("#resultsTable").DataTable()
             resultsTable.rows().every(function (i, tableLoop, rowLoop) {
                 var row = this.row(i)
                 var rowData = row.data()
                 var rid = rowData[0]
                 $.each(campaign.results, function (j, result) {
+                    if (result.source === "whatsapp") return
                     if (result.id == rid) {
                         rowData[8] = moment(result.send_date).format('MMMM Do YYYY, h:mm:ss a')
                         rowData[7] = result.reported
@@ -711,6 +730,9 @@ function poll() {
                 })
             })
             resultsTable.draw(false)
+            /* Update the WhatsApp tab and stats */
+            loadWhatsAppTab(campaign.results)
+            updateWhatsAppStats(campaign.results)
             /* Update the map information */
             updateMap(campaign.results)
             $('[data-toggle="tooltip"]').tooltip()
@@ -793,7 +815,8 @@ function load() {
                 Object.keys(statusMapping).forEach(function (k) {
                     email_series_data[k] = 0
                 });
-                $.each(campaign.results, function (i, result) {
+                var emailResults = campaign.results.filter(function(r) { return r.source !== "whatsapp" })
+                $.each(emailResults, function (i, result) {
                     resultsTable.row.add([
                         result.id,
                         "<i id=\"caret\" class=\"fa fa-caret-right\"></i>",
@@ -816,6 +839,8 @@ function load() {
                     }
                 })
                 resultsTable.draw();
+                loadWhatsAppTab(campaign.results);
+                updateWhatsAppStats(campaign.results);
                 // Setup tooltips
                 $('[data-toggle="tooltip"]').tooltip()
                 // Setup the individual timelines
@@ -855,6 +880,7 @@ function load() {
                 renderTimelineChart({
                     data: timeline_series_data
                 })
+                var emailTotalLoad = emailResults.length || 1
                 $.each(email_series_data, function (status, count) {
                     var email_data = []
                     if (!(status in statusMapping)) {
@@ -862,12 +888,12 @@ function load() {
                     }
                     email_data.push({
                         name: status,
-                        y: Math.floor((count / campaign.results.length) * 100),
+                        y: Math.floor((count / emailTotalLoad) * 100),
                         count: count
                     })
                     email_data.push({
                         name: '',
-                        y: 100 - Math.floor((count / campaign.results.length) * 100)
+                        y: 100 - Math.floor((count / emailTotalLoad) * 100)
                     })
                     var chart = renderPieChart({
                         elemId: statusMapping[status] + '_chart',
@@ -960,6 +986,359 @@ function report_mail(rid, cid) {
     })
 }
 
+// Calls the API to generate WhatsApp links and shows them in the modal
+function generateWhatsAppLinks() {
+    var count = parseInt($("#whatsapp_count").val(), 10)
+    if (!count || count < 1 || count > 1000) {
+        $("#whatsapp_modal_alert").html(
+            '<div class="alert alert-danger">Informe uma quantidade entre 1 e 1000.</div>'
+        )
+        return
+    }
+    var btn = $("#whatsapp_generate_btn")
+    btn.prop("disabled", true).html('<i class="fa fa-spinner fa-spin"></i> Gerando...')
+    $("#whatsapp_modal_alert").empty()
+    $("#whatsapp_links_area").hide()
+
+    query("/campaigns/" + campaign.id + "/whatsapp", "POST", { count: count }, true)
+    .done(function (links) {
+        renderWhatsAppLinkRows(links)
+        $("#whatsapp_links_area").show()
+        $("#whatsapp_modal_alert").html(
+            '<div class="alert alert-success">' + links.length + ' links gerados com sucesso!</div>'
+        )
+        poll()
+    }).fail(function (xhr) {
+        var msg = "Erro ao gerar links."
+        if (xhr.responseJSON && xhr.responseJSON.message) {
+            msg = xhr.responseJSON.message
+        }
+        $("#whatsapp_modal_alert").html('<div class="alert alert-danger">' + escapeHtml(msg) + '</div>')
+    }).always(function () {
+        btn.prop("disabled", false).html('<i class="fa fa-bolt"></i> Gerar')
+    })
+}
+
+// Chave do localStorage para links encurtados
+var SHORTEN_STORAGE_KEY = 'gophish.shortened'
+
+// Carrega o mapa de encurtados do localStorage
+function loadShortenedMap() {
+    try {
+        return JSON.parse(localStorage.getItem(SHORTEN_STORAGE_KEY)) || {}
+    } catch (e) {
+        return {}
+    }
+}
+
+// Salva um encurtamento no localStorage
+function saveShortenedURL(originalUrl, shortenedUrl) {
+    var map = loadShortenedMap()
+    map[originalUrl] = shortenedUrl
+    localStorage.setItem(SHORTEN_STORAGE_KEY, JSON.stringify(map))
+}
+
+// Renders individual link rows with copy and shorten buttons
+function renderWhatsAppLinkRows(links) {
+    var container = $("#whatsapp_links_list")
+    container.empty()
+    var shortenedMap = loadShortenedMap()
+
+    $.each(links, function (i, link) {
+        var num = i + 1
+        var originalUrl = link.url
+        var savedShort = shortenedMap[originalUrl] || null
+        var displayUrl = savedShort || originalUrl
+        var alreadyShortened = !!savedShort
+
+        var row = $('<div class="input-group" style="margin-bottom:5px;"></div>')
+
+        var badge = $('<span class="input-group-addon" style="min-width:40px; text-align:center; font-size:11px;">' + num + '</span>')
+
+        var input = $('<input type="text" class="form-control whatsapp-url-input" readonly style="font-size:11px; font-family:monospace;">')
+        input.val(displayUrl)
+        input.data('original-url', originalUrl)
+
+        var btnGroup = $('<span class="input-group-btn"></span>')
+
+        // Botão copiar
+        var copyBtn = $('<button class="btn btn-default btn-sm" title="Copiar"><i class="fa fa-copy"></i></button>')
+        copyBtn.on('click', function () {
+            copyToClipboard(input.val())
+            var self = $(this)
+            self.html('<i class="fa fa-check"></i>').removeClass('btn-default').addClass('btn-success')
+            setTimeout(function () {
+                self.html('<i class="fa fa-copy"></i>').removeClass('btn-success').addClass('btn-default')
+            }, 1500)
+        })
+
+        // Botão encurtar
+        var shortenBtn = $('<button class="btn btn-sm" title="Encurtar URL"><i class="fa fa-scissors"></i></button>')
+        if (alreadyShortened) {
+            shortenBtn.addClass('btn-success').prop('disabled', true).html('<i class="fa fa-check"></i>')
+        } else {
+            shortenBtn.addClass('btn-info')
+            shortenBtn.on('click', function () {
+                shortenSingleURL(input, $(this))
+            })
+        }
+
+        btnGroup.append(copyBtn).append(shortenBtn)
+        row.append(badge).append(input).append(btnGroup)
+        container.append(row)
+    })
+}
+
+// Encurta uma única URL, salva no localStorage e atualiza o input
+function shortenSingleURL(input, btn) {
+    var originalUrl = input.data('original-url') || input.val()
+    if (btn.hasClass('btn-success')) return
+    btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i>')
+    query('/shorten', 'POST', { url: originalUrl }, true)
+    .done(function (data) {
+        var shortened = data.urlEncurtada.trim()
+        input.val(shortened)
+        saveShortenedURL(originalUrl, shortened)
+        btn.html('<i class="fa fa-check"></i>').removeClass('btn-info').addClass('btn-success')
+    })
+    .fail(function () {
+        btn.prop('disabled', false).html('<i class="fa fa-scissors"></i>')
+        Swal.fire({ title: 'Erro', text: 'Não foi possível encurtar este link.', type: 'error', timer: 2000, showConfirmButton: false })
+    })
+}
+
+// Encurta todos os links ainda não encurtados
+function shortenAllWhatsAppLinks() {
+    var inputs = $(".whatsapp-url-input")
+    if (!inputs.length) return
+    var total = 0
+    var done = 0
+
+    inputs.each(function () {
+        var input = $(this)
+        var btn = input.closest('.input-group').find('button:last-child')
+        if (btn.hasClass('btn-success')) return
+        total++
+        btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i>')
+        var originalUrl = input.data('original-url') || input.val()
+        query('/shorten', 'POST', { url: originalUrl }, true)
+        .done(function (data) {
+            var shortened = data.urlEncurtada.trim()
+            input.val(shortened)
+            saveShortenedURL(originalUrl, shortened)
+            btn.html('<i class="fa fa-check"></i>').removeClass('btn-info').addClass('btn-success')
+        })
+        .fail(function () {
+            btn.prop('disabled', false).html('<i class="fa fa-scissors"></i>')
+        })
+        .always(function () {
+            done++
+            if (done === total) {
+                Swal.fire({ title: 'Concluído!', text: done + ' links encurtados.', type: 'success', timer: 2000, showConfirmButton: false })
+            }
+        })
+    })
+}
+
+// Copia todos os links (encurtados ou não)
+function copyAllWhatsAppLinks() {
+    var urls = []
+    $(".whatsapp-url-input").each(function () { urls.push($(this).val()) })
+    if (!urls.length) return
+    copyToClipboard(urls.join('\n'))
+    Swal.fire({ title: 'Copiado!', text: urls.length + ' links copiados.', type: 'success', timer: 1500, showConfirmButton: false })
+}
+
+// Copia apenas os links já encurtados
+function copyAllShortenedLinks() {
+    var urls = []
+    var shortenedMap = loadShortenedMap()
+    $(".whatsapp-url-input").each(function () {
+        var val = $(this).val()
+        var original = $(this).data('original-url')
+        if (shortenedMap[original]) urls.push(val)
+    })
+    if (!urls.length) {
+        Swal.fire({ title: 'Nenhum link encurtado', text: 'Encurte ao menos um link primeiro.', type: 'warning', timer: 2000, showConfirmButton: false })
+        return
+    }
+    copyToClipboard(urls.join('\n'))
+    Swal.fire({ title: 'Copiado!', text: urls.length + ' links encurtados copiados.', type: 'success', timer: 1500, showConfirmButton: false })
+}
+
+// Utilitário de cópia com fallback
+function copyToClipboard(text) {
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(text).catch(function () {
+            fallbackCopy(text)
+        })
+    } else {
+        fallbackCopy(text)
+    }
+}
+
+function fallbackCopy(text) {
+    var el = document.createElement('textarea')
+    el.value = text
+    el.style.position = 'fixed'
+    el.style.opacity = '0'
+    document.body.appendChild(el)
+    el.select()
+    document.execCommand('copy')
+    document.body.removeChild(el)
+}
+
+// Resets modal state when closed
+$("#whatsappModal").on("hidden.bs.modal", function () {
+    $("#whatsapp_modal_alert").empty()
+    $("#whatsapp_links_area").hide()
+    $("#whatsapp_links_list").empty()
+    $("#whatsapp_count").val("10")
+})
+
+function renderWhatsAppTimeline(data) {
+    var rid = data[0]
+    var name = data[2]
+
+    // Find the result email used to link timeline events
+    var resultEmail = ""
+    $.each(campaign.results, function (i, r) {
+        if (r.id === rid) { resultEmail = r.email; return false }
+    })
+
+    // Monta a URL original e verifica se há versão encurtada
+    var originalUrl = campaign.url + '?rid=' + rid
+    var shortenedMap = loadShortenedMap()
+    var shortenedUrl = shortenedMap[originalUrl] || null
+
+    var html = '<div style="padding:10px 20px;">'
+    html += '<strong>' + escapeHtml(name) + '</strong> &mdash; Result ID: <code>' + escapeHtml(rid) + '</code><br>'
+    html += '<div style="margin:8px 0 12px; font-size:12px; font-family:monospace; background:#f5f5f5; border:1px solid #ddd; border-radius:4px; padding:8px;">'
+    html += '<div><span class="text-muted">Original:&nbsp;&nbsp;</span><a href="' + escapeHtml(originalUrl) + '" target="_blank">' + escapeHtml(originalUrl) + '</a></div>'
+    if (shortenedUrl) {
+        html += '<div style="margin-top:4px;"><span class="text-muted">Encurtado: </span><a href="' + escapeHtml(shortenedUrl) + '" target="_blank" style="color:#27ae60;font-weight:bold;">' + escapeHtml(shortenedUrl) + '</a></div>'
+    } else {
+        html += '<div style="margin-top:4px;"><span class="text-muted">Encurtado: </span><em class="text-muted">não encurtado ainda</em></div>'
+    }
+    html += '</div>'
+
+    var hasEvents = false
+    $.each(campaign.timeline, function (i, event) {
+        if (!event.email || event.email !== resultEmail) return
+        hasEvents = true
+
+        var st = statuses[event.message] || { label: "label-default", icon: "fa-question" }
+        var ts = moment.utc(event.time).local().format('DD/MM/YYYY HH:mm:ss')
+
+        html += '<div style="margin-bottom:8px; padding:8px; border-left:3px solid #428bca; background:#f9f9f9;">'
+        html += '<span class="label ' + st.label + '"><i class="fa ' + (st.icon || 'fa-info') + '"></i> ' + escapeHtml(event.message) + '</span>'
+        html += ' &nbsp; <small class="text-muted">' + ts + '</small>'
+
+        if (event.details) {
+            try {
+                var details = JSON.parse(event.details)
+                if (details.browser && details.browser['user-agent']) {
+                    html += '<br><small><i class="fa fa-desktop"></i> ' + escapeHtml(details.browser['user-agent']) + '</small>'
+                }
+                if (details.payload) {
+                    html += '<br><table class="table table-condensed table-bordered" style="margin-top:6px;margin-bottom:0;">'
+                    html += '<thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody>'
+                    $.each(Object.keys(details.payload), function (j, param) {
+                        if (param === "rid") return
+                        var val = details.payload[param]
+                        if ($.isArray(val)) val = val.join(", ")
+                        html += '<tr><td>' + escapeHtml(param) + '</td><td><strong>' + escapeHtml(val) + '</strong></td></tr>'
+                    })
+                    html += '</tbody></table>'
+                }
+            } catch(e) {}
+        }
+        html += '</div>'
+    })
+
+    if (!hasEvents) {
+        html += '<p class="text-muted"><i class="fa fa-clock-o"></i> Nenhum evento registrado ainda.</p>'
+    }
+
+    html += '</div>'
+    return html
+}
+
+// Populates the WhatsApp results tab
+function loadWhatsAppTab(results) {
+    var isNew = !whatsappTable
+    if (isNew) {
+        whatsappTable = $("#whatsappResultsTable").DataTable({
+            destroy: true,
+            "order": [[5, "asc"]],   // ordenar pela coluna oculta de número sequencial
+            columnDefs: [
+                { orderable: false, targets: "no-sort" },
+                { className: "details-control", targets: [1] },
+                { visible: false, targets: [0, 5] },  // ocultar Result ID e nº sequencial
+                {
+                    render: function (data, type, row) { return createStatusLabel(data, "") },
+                    targets: [3]
+                },
+                {
+                    className: "text-center",
+                    render: function (reported, type, row) {
+                        if (type == "display") {
+                            return reported
+                                ? "<i class='fa fa-check-circle text-center text-success'></i>"
+                                : "<i class='fa fa-times-circle text-center text-muted'></i>"
+                        }
+                        return reported
+                    },
+                    targets: [4]
+                }
+            ]
+        })
+
+        // Timeline expand/collapse for WhatsApp table
+        $('#whatsappResultsTable tbody').on('click', 'td.details-control', function () {
+            var tr = $(this).closest('tr')
+            var row = whatsappTable.row(tr)
+            if (row.child.isShown()) {
+                row.child.hide()
+                tr.removeClass('shown')
+                $(this).find("i").removeClass("fa-caret-down").addClass("fa-caret-right")
+            } else {
+                $(this).find("i").removeClass("fa-caret-right").addClass("fa-caret-down")
+                row.child(renderWhatsAppTimeline(row.data())).show()
+                tr.addClass('shown')
+                // Wire up the detail toggle inside the child row
+                tr.next().find(".timeline-event-details").on("click", function () {
+                    var payloadResults = $(this).parent().find(".timeline-event-results")
+                    if (payloadResults.is(":visible")) {
+                        $(this).find("i").removeClass("fa-caret-down").addClass("fa-caret-right")
+                        payloadResults.hide()
+                    } else {
+                        $(this).find("i").removeClass("fa-caret-right").addClass("fa-caret-down")
+                        payloadResults.show()
+                    }
+                })
+            }
+        })
+    }
+
+    whatsappTable.clear()
+    $.each(results, function (i, r) {
+        if (r.source !== "whatsapp") return
+        var name = escapeHtml(r.first_name) || ""
+        // extrai o número do nome ("WhatsApp #7" → 7) para ordenação numérica
+        var seq = parseInt((r.first_name || "").replace(/\D/g, ""), 10) || 0
+        whatsappTable.row.add([
+            r.id,
+            "<i id='caret' class='fa fa-caret-right'></i>",
+            name,
+            r.status,
+            r.reported,
+            seq   // coluna oculta para ordenação numérica
+        ])
+    })
+    whatsappTable.draw()
+}
+
 $(document).ready(function () {
     Highcharts.setOptions({
         global: {
@@ -971,3 +1350,55 @@ $(document).ready(function () {
     // Start the polling loop
     setRefresh = setTimeout(refresh, 60000)
 })
+
+var waChartsInitialized = false
+
+// Updates (or initializes) the WhatsApp donut charts based on current results
+function updateWhatsAppStats(results) {
+    var waResults = results.filter(function(r) { return r.source === "whatsapp" })
+    var generated = waResults.length
+    var clicked = 0
+    var submitted = 0
+
+    $.each(waResults, function(i, r) {
+        if (r.status === "Submitted Data") {
+            submitted++
+            clicked++ // submitted implies clicked
+        } else if (r.status === "Clicked Link") {
+            clicked++
+        }
+    })
+
+    var total = generated || 1
+
+    var charts = [
+        { elemId: "wa_generated_chart", title: "Links Gerados",   count: generated, color: "#25D366" },
+        { elemId: "wa_clicked_chart",   title: "Links Clicados",  count: clicked,   color: "#F39C12" },
+        { elemId: "wa_submitted_chart", title: "Dados Submetidos",count: submitted,  color: "#e74c3c" },
+    ]
+
+    $.each(charts, function(i, c) {
+        var pct  = Math.floor((c.count / total) * 100)
+        var data = [
+            { name: c.title, y: pct,       count: c.count },
+            { name: '',      y: 100 - pct                  }
+        ]
+        if (!waChartsInitialized) {
+            renderPieChart({
+                elemId: c.elemId,
+                title:  c.title,
+                name:   c.title,
+                data:   data,
+                colors: [c.color, '#dddddd']
+            })
+        } else {
+            var chart = $("#" + c.elemId).highcharts()
+            if (chart) {
+                // update series data (triggers render event which updates innerText)
+                chart.series[0].setData(data, true)
+            }
+        }
+    })
+
+    waChartsInitialized = true
+}
