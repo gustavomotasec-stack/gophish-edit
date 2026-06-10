@@ -1058,6 +1058,7 @@ function renderWhatsAppLinkRows(links) {
         var input = $('<input type="text" class="form-control whatsapp-url-input" readonly style="font-size:11px; font-family:monospace;">')
         input.val(displayUrl)
         input.data('original-url', originalUrl)
+        input.data('rid', link.id || '')
 
         var btnGroup = $('<span class="input-group-btn"></span>')
 
@@ -1092,11 +1093,12 @@ function renderWhatsAppLinkRows(links) {
 // Encurta uma única URL, salva no localStorage e atualiza o input
 function shortenSingleURL(input, btn) {
     var originalUrl = input.data('original-url') || input.val()
+    var rid = input.data('rid') || ''
     if (btn.hasClass('btn-success')) return
     btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i>')
-    query('/shorten', 'POST', { url: originalUrl }, true)
+    query('/shorten', 'POST', { url: originalUrl, campaign_id: parseInt(campaign.id), rid: rid }, true)
     .done(function (data) {
-        var shortened = data.urlEncurtada.trim()
+        var shortened = data.short_url
         input.val(shortened)
         saveShortenedURL(originalUrl, shortened)
         btn.html('<i class="fa fa-check"></i>').removeClass('btn-info').addClass('btn-success')
@@ -1121,9 +1123,10 @@ function shortenAllWhatsAppLinks() {
         total++
         btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i>')
         var originalUrl = input.data('original-url') || input.val()
-        query('/shorten', 'POST', { url: originalUrl }, true)
+        var rid = input.data('rid') || ''
+        query('/shorten', 'POST', { url: originalUrl, campaign_id: parseInt(campaign.id), rid: rid }, true)
         .done(function (data) {
-            var shortened = data.urlEncurtada.trim()
+            var shortened = data.short_url
             input.val(shortened)
             saveShortenedURL(originalUrl, shortened)
             btn.html('<i class="fa fa-check"></i>').removeClass('btn-info').addClass('btn-success')

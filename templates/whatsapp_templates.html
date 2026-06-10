@@ -1,0 +1,86 @@
+{{template "base" .}}
+{{define "title"}}WhatsApp Templates{{end}}
+{{define "content"}}
+<div class="row">
+    <div class="col-sm-10 col-sm-offset-1">
+        <div class="page-header">
+            <h3>WhatsApp Templates
+                <small class="text-muted">Crie mensagens reutilizáveis para campanhas WhatsApp</small>
+                <button class="btn btn-success pull-right" data-toggle="modal" data-target="#modal"><i class="fa fa-plus"></i> Novo Template</button>
+            </h3>
+        </div>
+        <div id="emptyMessage" class="alert alert-info" style="display:none;">
+            Nenhum template criado ainda. Clique em <strong>Novo Template</strong> para começar.
+        </div>
+        <table id="templateTable" class="table" style="display:none;">
+            <thead><tr>
+                <th>Nome</th>
+                <th>Última modificação</th>
+                <th class="no-sort">Ações</th>
+            </tr></thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Modal Novo/Editar Template -->
+<div class="modal fade" id="modal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal">&times;</button>
+                <h4 class="modal-title"><i class="fa fa-whatsapp"></i> <span id="modal-title">Novo WhatsApp Template</span></h4>
+            </div>
+            <div class="modal-body">
+                <div id="modal-alert"></div>
+                <div class="form-group">
+                    <label>Nome do Template</label>
+                    <input type="text" id="name" class="form-control" placeholder="Ex: Aviso de Segurança">
+                </div>
+                <div class="form-group">
+                    <label>Mensagem
+                        <small class="text-muted"> — use <code>{{"{{"}}{{".URL"}}{{"}}"}}</code>, <code>{{"{{"}}{{".FirstName"}}{{"}}"}}</code>, <code>{{"{{"}}{{".LastName"}}{{"}}"}}</code></small>
+                    </label>
+                    <div class="btn-group btn-group-xs" style="margin-bottom:6px;">
+                        <button class="btn btn-default" onclick="wrapText('*','*')" title="Negrito"><b>B</b></button>
+                        <button class="btn btn-default" onclick="wrapText('_','_')" title="Itálico"><i>I</i></button>
+                        <button class="btn btn-default" onclick="wrapText('~','~')" title="Tachado"><s>S</s></button>
+                        <button class="btn btn-default" onclick="wrapText('```','```')" title="Código">{ }</button>
+                        <button class="btn btn-default" onclick="insertText('{{"{{"}}{{".URL"}}{{"}}"}}')" title="Inserir URL">🔗 URL</button>
+                        <button class="btn btn-default" onclick="insertText('{{"{{"}}{{".FirstName"}}{{"}}"}}')" title="Primeiro nome">👤 Nome</button>
+                    </div>
+                    <textarea id="body" class="form-control" rows="8" placeholder="Olá {{"{{"}}{{".FirstName"}}{{"}}"}}, acesse o link: {{"{{"}}{{".URL"}}{{"}}"}}"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Preview</label>
+                    <div id="preview-box" style="background:#e5ddd5; padding:12px; border-radius:8px; min-height:60px; font-family:sans-serif; font-size:14px; white-space:pre-wrap; word-break:break-word;"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <input type="hidden" id="template-id" value="0">
+                <button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="saveTemplate()"><i class="fa fa-save"></i> Salvar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Confirmar Delete -->
+<div class="modal fade" id="deleteModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title">Confirmar exclusão</h4>
+            </div>
+            <div class="modal-body">Tem certeza que deseja excluir este template?</div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-danger" id="confirm-delete">Excluir</button>
+            </div>
+        </div>
+    </div>
+</div>
+{{end}}
+{{define "scripts"}}
+<script src="/js/dist/app/whatsapp_templates.min.js"></script>
+{{end}}

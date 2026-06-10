@@ -1,0 +1,48 @@
+{{template "base" .}}
+{{define "title"}}OpenWA Settings{{end}}
+{{define "content"}}
+<div class="row">
+    <div class="col-sm-8 col-sm-offset-2">
+        <div class="page-header">
+            <h3><i class="fa fa-cog"></i> OpenWA Settings</h3>
+        </div>
+        <div id="alert-area"></div>
+        <div class="panel panel-default">
+            <div class="panel-body">
+                <div class="form-group">
+                    <label>URL da API OpenWA</label>
+                    <input type="text" id="api_url" class="form-control" placeholder="http://localhost:3000">
+                    <p class="help-block">Endereço onde o OpenWA está rodando. Ex: <code>http://localhost:3000</code></p>
+                </div>
+                <div class="form-group">
+                    <label>API Key <small class="text-muted">(opcional)</small></label>
+                    <input type="text" id="api_key" class="form-control" placeholder="Deixe em branco se não usar autenticação">
+                </div>
+                <div class="row">
+                    <div class="col-xs-6">
+                        <div class="form-group">
+                            <label>Delay mínimo padrão (seg)</label>
+                            <input type="number" id="min_delay" class="form-control" value="3" min="1">
+                        </div>
+                    </div>
+                    <div class="col-xs-6">
+                        <div class="form-group">
+                            <label>Delay máximo padrão (seg)</label>
+                            <input type="number" id="max_delay" class="form-control" value="8" min="1">
+                        </div>
+                    </div>
+                </div>
+                <button class="btn btn-primary" onclick="saveConfig()">
+                    <i class="fa fa-save"></i> Salvar Configurações
+                </button>
+                <button class="btn btn-default" onclick="testConnection()" style="margin-left:8px;">
+                    <i class="fa fa-plug"></i> Testar Conexão
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{{end}}
+{{define "scripts"}}
+<script src="/js/dist/app/openwa_settings.min.js"></script>
+{{end}}

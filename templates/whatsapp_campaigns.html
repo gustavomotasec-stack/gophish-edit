@@ -1,0 +1,101 @@
+{{template "base" .}}
+{{define "title"}}WhatsApp Campaigns{{end}}
+{{define "content"}}
+<div class="row">
+    <div class="col-sm-10 col-sm-offset-1">
+        <div class="page-header">
+            <h3><i class="fa fa-whatsapp"></i> WhatsApp Campaigns
+                <small class="text-muted">Disparos via OpenWA</small>
+                <button class="btn btn-success pull-right" data-toggle="modal" data-target="#modal">
+                    <i class="fa fa-plus"></i> Nova Campanha
+                </button>
+            </h3>
+        </div>
+        <div id="emptyMessage" class="alert alert-info" style="display:none;">
+            Nenhuma campanha disparada ainda. Clique em <strong>Nova Campanha</strong> para começar.
+        </div>
+        <table id="campaignsTable" class="table" style="display:none;">
+            <thead><tr>
+                <th>Nome</th>
+                <th>Template</th>
+                <th>Lista</th>
+                <th>Números</th>
+                <th>Agendado</th>
+                <th>Status</th>
+            </tr></thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Modal Nova Campanha -->
+<div class="modal fade" id="modal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal">&times;</button>
+                <h4 class="modal-title"><i class="fa fa-whatsapp"></i> Nova Campanha WhatsApp</h4>
+            </div>
+            <div class="modal-body">
+                <div id="modal-alert"></div>
+
+                <div class="form-group">
+                    <label>Template de mensagem</label>
+                    <select id="template_id" class="form-control">
+                        <option value="">-- Selecione um template --</option>
+                    </select>
+                </div>
+
+                <div id="preview-area" style="display:none; margin-bottom:15px;">
+                    <label>Preview da mensagem</label>
+                    <div id="preview-box" style="background:#e5ddd5; padding:12px; border-radius:8px; font-family:sans-serif; font-size:14px; white-space:pre-wrap; word-break:break-word;"></div>
+                </div>
+
+                <div class="form-group">
+                    <label>Lista de números</label>
+                    <select id="phone_list_id" class="form-control">
+                        <option value="">-- Selecione uma lista --</option>
+                    </select>
+                    <p class="help-block" id="list-info"></p>
+                </div>
+
+                <div class="form-group">
+                    <label>Campanha GoPhish <small class="text-muted">(para gerar links rastreados)</small></label>
+                    <select id="campaign_id" class="form-control">
+                        <option value="0">-- Nenhuma (sem rastreamento) --</option>
+                    </select>
+                </div>
+
+                <div class="row">
+                    <div class="col-xs-6">
+                        <div class="form-group">
+                            <label>Delay mínimo entre envios (seg)</label>
+                            <input type="number" id="min_delay" class="form-control" value="3" min="1">
+                        </div>
+                    </div>
+                    <div class="col-xs-6">
+                        <div class="form-group">
+                            <label>Delay máximo entre envios (seg)</label>
+                            <input type="number" id="max_delay" class="form-control" value="8" min="1">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Agendar envio <small class="text-muted">(deixe em branco para disparar agora)</small></label>
+                    <input type="datetime-local" id="scheduled_at" class="form-control">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" onclick="dispatchCampaign()">
+                    <i class="fa fa-paper-plane"></i> Disparar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{{end}}
+{{define "scripts"}}
+<script src="/js/dist/app/whatsapp_campaigns.min.js"></script>
+{{end}}

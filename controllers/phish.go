@@ -112,6 +112,7 @@ func (ps *PhishingServer) registerRoutes() {
 	router.PathPrefix("/static/").Handler(http.StripPrefix("/static/", fileServer))
 	router.HandleFunc("/track", ps.TrackHandler)
 	router.HandleFunc("/robots.txt", ps.RobotsHandler)
+	router.HandleFunc("/r/{code}", ps.ShortLinkHandler)
 	router.HandleFunc("/{path:.*}/track", ps.TrackHandler)
 	router.HandleFunc("/{path:.*}/report", ps.ReportHandler)
 	router.HandleFunc("/report", ps.ReportHandler)
@@ -296,6 +297,18 @@ func renderPhishResponse(w http.ResponseWriter, r *http.Request, ptx models.Phis
 // RobotsHandler prevents search engines, etc. from indexing phishing materials
 func (ps *PhishingServer) RobotsHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintln(w, "User-agent: *\nDisallow: /")
+}
+
+// ShortLinkHandler redirects /r/{code} to the original phishing URL.
+func (ps *PhishingServer) ShortLinkHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	code := vars["code"]
+	sl, err := models.GetShortLink(code)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	http.Redirect(w, r, sl.Original, http.StatusFound)
 }
 
 // TransparencyHandler returns a TransparencyResponse for the provided result

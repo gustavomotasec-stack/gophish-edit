@@ -130,6 +130,10 @@ func (as *AdminServer) registerRoutes() {
 	router.HandleFunc("/campaigns", mid.Use(as.Campaigns, mid.RequireLogin))
 	router.HandleFunc("/campaigns/{id:[0-9]+}", mid.Use(as.CampaignID, mid.RequireLogin))
 	router.HandleFunc("/templates", mid.Use(as.Templates, mid.RequireLogin))
+	router.HandleFunc("/whatsapp_templates", mid.Use(as.WATemplates, mid.RequireLogin))
+	router.HandleFunc("/phone_lists", mid.Use(as.PhoneListsPage, mid.RequireLogin))
+	router.HandleFunc("/whatsapp_campaigns", mid.Use(as.WACampaigns, mid.RequireLogin))
+	router.HandleFunc("/openwa_settings", mid.Use(as.OpenWASettings, mid.RequireLogin))
 	router.HandleFunc("/groups", mid.Use(as.Groups, mid.RequireLogin))
 	router.HandleFunc("/landing_pages", mid.Use(as.LandingPages, mid.RequireLogin))
 	router.HandleFunc("/sending_profiles", mid.Use(as.SendingProfiles, mid.RequireLogin))
@@ -222,6 +226,34 @@ func (as *AdminServer) Templates(w http.ResponseWriter, r *http.Request) {
 	params := newTemplateParams(r)
 	params.Title = "Email Templates"
 	getTemplate(w, "templates").ExecuteTemplate(w, "base", params)
+}
+
+// WACampaigns handles the WhatsApp Campaigns page
+func (as *AdminServer) WACampaigns(w http.ResponseWriter, r *http.Request) {
+	params := newTemplateParams(r)
+	params.Title = "WhatsApp Campaigns"
+	getTemplate(w, "whatsapp_campaigns").ExecuteTemplate(w, "base", params)
+}
+
+// OpenWASettings handles the OpenWA Settings page
+func (as *AdminServer) OpenWASettings(w http.ResponseWriter, r *http.Request) {
+	params := newTemplateParams(r)
+	params.Title = "OpenWA Settings"
+	getTemplate(w, "openwa_settings").ExecuteTemplate(w, "base", params)
+}
+
+// WATemplates handles the WhatsApp Templates page
+func (as *AdminServer) WATemplates(w http.ResponseWriter, r *http.Request) {
+	params := newTemplateParams(r)
+	params.Title = "WhatsApp Templates"
+	getTemplate(w, "whatsapp_templates").ExecuteTemplate(w, "base", params)
+}
+
+// PhoneListsPage handles the Phone Lists page
+func (as *AdminServer) PhoneListsPage(w http.ResponseWriter, r *http.Request) {
+	params := newTemplateParams(r)
+	params.Title = "Phone Lists"
+	getTemplate(w, "phone_lists").ExecuteTemplate(w, "base", params)
 }
 
 // Groups handles the default path and template execution

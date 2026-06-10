@@ -1,0 +1,72 @@
+{{template "base" .}}
+{{define "title"}}Phone Lists{{end}}
+{{define "content"}}
+<div class="row">
+    <div class="col-sm-10 col-sm-offset-1">
+        <div class="page-header">
+            <h3>Phone Lists
+                <small class="text-muted">Listas de números para campanhas WhatsApp</small>
+                <button class="btn btn-success pull-right" data-toggle="modal" data-target="#modal"><i class="fa fa-plus"></i> Nova Lista</button>
+            </h3>
+        </div>
+        <div id="emptyMessage" class="alert alert-info" style="display:none;">
+            Nenhuma lista criada ainda. Clique em <strong>Nova Lista</strong> para começar.
+        </div>
+        <table id="listsTable" class="table" style="display:none;">
+            <thead><tr>
+                <th>Nome</th>
+                <th>Números</th>
+                <th>Última modificação</th>
+                <th class="no-sort">Ações</th>
+            </tr></thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Modal Nova/Editar Lista -->
+<div class="modal fade" id="modal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal">&times;</button>
+                <h4 class="modal-title"><i class="fa fa-phone"></i> <span id="modal-title">Nova Phone List</span></h4>
+            </div>
+            <div class="modal-body">
+                <div id="modal-alert"></div>
+                <div class="form-group">
+                    <label>Nome da Lista</label>
+                    <input type="text" id="name" class="form-control" placeholder="Ex: Funcionários TI">
+                </div>
+                <div class="form-group">
+                    <label>Números <small class="text-muted">— um por linha, formato: 5511999999999 (DDI+DDD+número)</small></label>
+                    <textarea id="numbers" class="form-control" rows="12" placeholder="5511999999999&#10;5511988888888&#10;5511977777777"></textarea>
+                    <p class="help-block" id="count-info"></p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <input type="hidden" id="list-id" value="0">
+                <button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="saveList()"><i class="fa fa-save"></i> Salvar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Confirmar Delete -->
+<div class="modal fade" id="deleteModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header"><h4 class="modal-title">Confirmar exclusão</h4></div>
+            <div class="modal-body">Tem certeza que deseja excluir esta lista?</div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-danger" id="confirm-delete">Excluir</button>
+            </div>
+        </div>
+    </div>
+</div>
+{{end}}
+{{define "scripts"}}
+<script src="/js/dist/app/phone_lists.min.js"></script>
+{{end}}

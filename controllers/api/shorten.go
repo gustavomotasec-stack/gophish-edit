@@ -2,19 +2,21 @@ package api
 
 import (
 	"encoding/json"
-	"fmt"
-	"io"
 	"net/http"
-	"net/url"
+	"strings"
+
+	"github.com/gophish/gophish/models"
 )
 
 type shortenRequest struct {
-	URL string `json:"url"`
+	URL        string `json:"url"`
+	CampaignId int64  `json:"campaign_id"`
+	RId        string `json:"rid"`
 }
 
-// ShortenURL proxies a URL shortening request to TinyURL.
-// POST /api/shorten with body {"url": "http://..."}
-// Returns {"urlEncurtada": "tinyurl.com/xxxxx"}
+// ShortenURL creates a built-in short link and returns the short URL.
+// POST /api/shorten  {"url": "...", "campaign_id": 1, "rid": "AbCdEfG"}
+// Returns {"short_url": "http://host/r/AbCdEfG"}
 func (as *Server) ShortenURL(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -27,26 +29,42 @@ func (as *Server) ShortenURL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	apiURL := fmt.Sprintf("https://is.gd/create.php?format=simple&url=%s", url.QueryEscape(req.URL))
-	resp, err := http.Get(apiURL)
+	sl, err := models.CreateShortLink(req.URL, req.CampaignId, req.RId)
 	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadGateway)
-		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
-		return
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		http.Error(w, `{"error":"failed to read response"}`, http.StatusInternalServerError)
+		http.Error(w, `{"error":"failed to create short link"}`, http.StatusInternalServerError)
 		return
 	}
 
-	// TinyURL retorna a URL completa como texto: "https://tinyurl.com/xxxxx"
-	shortened := string(body)
+	// Build the short URL using the same host as the request (admin server).
+	// The phish server is on a different port; we extract the base from the
+	// original URL instead so the redirect points to the right server.
+	base := extractBase(req.URL)
+	shortURL := base + "/r/" + sl.Code
 
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"urlEncurtada": shortened})
+	json.NewEncoder(w).Encode(map[string]string{
+		"short_url": shortURL,
+		"code":      sl.Code,
+	})
+}
+
+// ExtractBase returns scheme+host from a full URL string.
+func ExtractBase(rawURL string) string {
+	return extractBase(rawURL)
+}
+
+// extractBase returns scheme+host from a full URL string.
+func extractBase(rawURL string) string {
+	// Find "://"
+	idx := strings.Index(rawURL, "://")
+	if idx < 0 {
+		return ""
+	}
+	rest := rawURL[idx+3:]
+	// Find next slash
+	slash := strings.Index(rest, "/")
+	if slash < 0 {
+		return rawURL
+	}
+	return rawURL[:idx+3+slash]
 }
