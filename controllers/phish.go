@@ -113,6 +113,7 @@ func (ps *PhishingServer) registerRoutes() {
 	router.HandleFunc("/track", ps.TrackHandler)
 	router.HandleFunc("/robots.txt", ps.RobotsHandler)
 	router.HandleFunc("/r/{code}", ps.ShortLinkHandler)
+	router.HandleFunc("/alerta", ps.AlertHandler)
 	router.HandleFunc("/{path:.*}/track", ps.TrackHandler)
 	router.HandleFunc("/{path:.*}/report", ps.ReportHandler)
 	router.HandleFunc("/report", ps.ReportHandler)
@@ -309,6 +310,11 @@ func (ps *PhishingServer) ShortLinkHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	http.Redirect(w, r, sl.Original, http.StatusFound)
+}
+
+// AlertHandler serves the security awareness alert page at /alerta.
+func (ps *PhishingServer) AlertHandler(w http.ResponseWriter, r *http.Request) {
+	http.ServeFile(w, r, "static/alerta.html")
 }
 
 // TransparencyHandler returns a TransparencyResponse for the provided result
