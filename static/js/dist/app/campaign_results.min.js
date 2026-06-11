@@ -218,9 +218,7 @@ function exportAsCSV(scope) {
             filename = campaign.name + ' - Email Events.csv'
             break;
         case "whatsapp_results":
-            csvScope = campaign.results.filter(function(r) { return r.source === "whatsapp" })
-            filename = campaign.name + ' - WhatsApp Results.csv'
-            break;
+            return exportWhatsAppReport()
         case "whatsapp_events":
             var waEmailsExp = {}
             campaign.results.forEach(function(r) { if (r.source === "whatsapp") waEmailsExp[r.email] = true })
@@ -250,6 +248,79 @@ function exportAsCSV(scope) {
         document.body.removeChild(dlLink)
     }
     $("#exportButton").html(exportHTML)
+}
+
+function exportWhatsAppReport() {
+    var waResults = campaign.results.filter(function(r) { return r.source === 'whatsapp' })
+    if (!waResults.length) {
+        Swal.fire('Sem dados', 'Nenhum link WhatsApp gerado nesta campanha.', 'info')
+        return
+    }
+
+    // Build map: email -> list of submitted payloads from timeline
+    var submittedMap = {}
+    campaign.timeline.forEach(function(ev) {
+        if (ev.message !== 'Submitted Data') return
+        try {
+            var details = JSON.parse(ev.details)
+            var payload = details.payload || {}
+            var fields = []
+            Object.keys(payload).forEach(function(k) {
+                if (k === 'rid' || k === '__original_url') return
+                var vals = payload[k]
+                if (Array.isArray(vals)) vals = vals.join('; ')
+                fields.push(k + '=' + vals)
+            })
+            if (!submittedMap[ev.email]) submittedMap[ev.email] = []
+            submittedMap[ev.email].push(fields.join(' | '))
+        } catch(e) {}
+    })
+
+    var gerados = waResults.length
+    var clicados = waResults.filter(function(r) {
+        return r.status === 'Clicked Link' || r.status === 'Submitted Data'
+    }).length
+    var submetidos = waResults.filter(function(r) { return r.status === 'Submitted Data' }).length
+
+    var rows = []
+    // Summary block
+    rows.push(['Campanha', campaign.name])
+    rows.push(['Links gerados', gerados])
+    rows.push(['Links clicados', clicados])
+    rows.push(['Dados submetidos', submetidos])
+    rows.push([])
+    // Column headers
+    rows.push(['#', 'Nome', 'RID', 'URL', 'Status', 'Dados Submetidos'])
+
+    waResults.forEach(function(r, i) {
+        var rid = r.id || ''
+        var url = buildPhishURL(rid)
+        var submitted = (submittedMap[r.email] || []).join(' // ')
+        rows.push([i + 1, r.first_name || r.email, rid, url, r.status, submitted])
+    })
+
+    var csvString = rows.map(function(row) {
+        return row.map(function(cell) {
+            var s = String(cell === undefined || cell === null ? '' : cell)
+            if (s.search(/("|,|\n)/) >= 0) s = '"' + s.replace(/"/g, '""') + '"'
+            return s
+        }).join(',')
+    }).join('\r\n')
+
+    var bom = '﻿'
+    var csvData = new Blob([bom + csvString], { type: 'text/csv;charset=utf-8;' })
+    var filename = campaign.name + ' - Relatorio WhatsApp.csv'
+    if (navigator.msSaveBlob) {
+        navigator.msSaveBlob(csvData, filename)
+    } else {
+        var url2 = window.URL.createObjectURL(csvData)
+        var a = document.createElement('a')
+        a.href = url2
+        a.setAttribute('download', filename)
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+    }
 }
 
 function replay(event_idx) {
