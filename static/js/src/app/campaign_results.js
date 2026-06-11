@@ -1033,8 +1033,8 @@ function renderWhatsAppLinkRows(links) {
 
     $.each(links, function (i, link) {
         var num = i + 1
-        var rid = link.id || ''
-        var url = buildPhishURL(rid)
+        var rid = link.rid || ''
+        var url = link.url || buildPhishURL(rid)
 
         var row = $('<div class="input-group" style="margin-bottom:5px;"></div>')
         var badge = $('<span class="input-group-addon" style="min-width:40px; text-align:center; font-size:11px;">' + num + '</span>')
