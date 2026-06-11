@@ -986,6 +986,13 @@ function report_mail(rid, cid) {
     })
 }
 
+var PHISH_DOMAIN = 'futura.atomtecnologias.com.br'
+
+// Gera a URL de phishing com o domínio customizado
+function buildPhishURL(rid) {
+    return 'http://' + PHISH_DOMAIN + '/?rid=' + rid
+}
+
 // Calls the API to generate WhatsApp links and shows them in the modal
 function generateWhatsAppLinks() {
     var count = parseInt($("#whatsapp_count").val(), 10)
@@ -1019,50 +1026,22 @@ function generateWhatsAppLinks() {
     })
 }
 
-// Chave do localStorage para links encurtados
-var SHORTEN_STORAGE_KEY = 'gophish.shortened'
-
-// Carrega o mapa de encurtados do localStorage
-function loadShortenedMap() {
-    try {
-        return JSON.parse(localStorage.getItem(SHORTEN_STORAGE_KEY)) || {}
-    } catch (e) {
-        return {}
-    }
-}
-
-// Salva um encurtamento no localStorage
-function saveShortenedURL(originalUrl, shortenedUrl) {
-    var map = loadShortenedMap()
-    map[originalUrl] = shortenedUrl
-    localStorage.setItem(SHORTEN_STORAGE_KEY, JSON.stringify(map))
-}
-
-// Renders individual link rows with copy and shorten buttons
+// Renderiza as linhas de links com botão de copiar individual
 function renderWhatsAppLinkRows(links) {
     var container = $("#whatsapp_links_list")
     container.empty()
-    var shortenedMap = loadShortenedMap()
 
     $.each(links, function (i, link) {
         var num = i + 1
-        var originalUrl = link.url
-        var savedShort = shortenedMap[originalUrl] || null
-        var displayUrl = savedShort || originalUrl
-        var alreadyShortened = !!savedShort
+        var rid = link.id || ''
+        var url = buildPhishURL(rid)
 
         var row = $('<div class="input-group" style="margin-bottom:5px;"></div>')
-
         var badge = $('<span class="input-group-addon" style="min-width:40px; text-align:center; font-size:11px;">' + num + '</span>')
-
         var input = $('<input type="text" class="form-control whatsapp-url-input" readonly style="font-size:11px; font-family:monospace;">')
-        input.val(displayUrl)
-        input.data('original-url', originalUrl)
-        input.data('rid', link.id || '')
+        input.val(url)
 
         var btnGroup = $('<span class="input-group-btn"></span>')
-
-        // Botão copiar
         var copyBtn = $('<button class="btn btn-default btn-sm" title="Copiar"><i class="fa fa-copy"></i></button>')
         copyBtn.on('click', function () {
             copyToClipboard(input.val())
@@ -1073,100 +1052,19 @@ function renderWhatsAppLinkRows(links) {
             }, 1500)
         })
 
-        // Botão encurtar
-        var shortenBtn = $('<button class="btn btn-sm" title="Encurtar URL"><i class="fa fa-scissors"></i></button>')
-        if (alreadyShortened) {
-            shortenBtn.addClass('btn-success').prop('disabled', true).html('<i class="fa fa-check"></i>')
-        } else {
-            shortenBtn.addClass('btn-info')
-            shortenBtn.on('click', function () {
-                shortenSingleURL(input, $(this))
-            })
-        }
-
-        btnGroup.append(copyBtn).append(shortenBtn)
+        btnGroup.append(copyBtn)
         row.append(badge).append(input).append(btnGroup)
         container.append(row)
     })
 }
 
-// Encurta uma única URL, salva no localStorage e atualiza o input
-function shortenSingleURL(input, btn) {
-    var originalUrl = input.data('original-url') || input.val()
-    var rid = input.data('rid') || ''
-    if (btn.hasClass('btn-success')) return
-    btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i>')
-    query('/shorten', 'POST', { url: originalUrl, campaign_id: parseInt(campaign.id), rid: rid }, true)
-    .done(function (data) {
-        var shortened = data.short_url
-        input.val(shortened)
-        saveShortenedURL(originalUrl, shortened)
-        btn.html('<i class="fa fa-check"></i>').removeClass('btn-info').addClass('btn-success')
-    })
-    .fail(function () {
-        btn.prop('disabled', false).html('<i class="fa fa-scissors"></i>')
-        Swal.fire({ title: 'Erro', text: 'Não foi possível encurtar este link.', type: 'error', timer: 2000, showConfirmButton: false })
-    })
-}
-
-// Encurta todos os links ainda não encurtados
-function shortenAllWhatsAppLinks() {
-    var inputs = $(".whatsapp-url-input")
-    if (!inputs.length) return
-    var total = 0
-    var done = 0
-
-    inputs.each(function () {
-        var input = $(this)
-        var btn = input.closest('.input-group').find('button:last-child')
-        if (btn.hasClass('btn-success')) return
-        total++
-        btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i>')
-        var originalUrl = input.data('original-url') || input.val()
-        var rid = input.data('rid') || ''
-        query('/shorten', 'POST', { url: originalUrl, campaign_id: parseInt(campaign.id), rid: rid }, true)
-        .done(function (data) {
-            var shortened = data.short_url
-            input.val(shortened)
-            saveShortenedURL(originalUrl, shortened)
-            btn.html('<i class="fa fa-check"></i>').removeClass('btn-info').addClass('btn-success')
-        })
-        .fail(function () {
-            btn.prop('disabled', false).html('<i class="fa fa-scissors"></i>')
-        })
-        .always(function () {
-            done++
-            if (done === total) {
-                Swal.fire({ title: 'Concluído!', text: done + ' links encurtados.', type: 'success', timer: 2000, showConfirmButton: false })
-            }
-        })
-    })
-}
-
-// Copia todos os links (encurtados ou não)
+// Copia todos os links
 function copyAllWhatsAppLinks() {
     var urls = []
     $(".whatsapp-url-input").each(function () { urls.push($(this).val()) })
     if (!urls.length) return
     copyToClipboard(urls.join('\n'))
     Swal.fire({ title: 'Copiado!', text: urls.length + ' links copiados.', type: 'success', timer: 1500, showConfirmButton: false })
-}
-
-// Copia apenas os links já encurtados
-function copyAllShortenedLinks() {
-    var urls = []
-    var shortenedMap = loadShortenedMap()
-    $(".whatsapp-url-input").each(function () {
-        var val = $(this).val()
-        var original = $(this).data('original-url')
-        if (shortenedMap[original]) urls.push(val)
-    })
-    if (!urls.length) {
-        Swal.fire({ title: 'Nenhum link encurtado', text: 'Encurte ao menos um link primeiro.', type: 'warning', timer: 2000, showConfirmButton: false })
-        return
-    }
-    copyToClipboard(urls.join('\n'))
-    Swal.fire({ title: 'Copiado!', text: urls.length + ' links encurtados copiados.', type: 'success', timer: 1500, showConfirmButton: false })
 }
 
 // Utilitário de cópia com fallback
@@ -1209,20 +1107,12 @@ function renderWhatsAppTimeline(data) {
         if (r.id === rid) { resultEmail = r.email; return false }
     })
 
-    // Monta a URL original e verifica se há versão encurtada
-    var originalUrl = campaign.url + '?rid=' + rid
-    var shortenedMap = loadShortenedMap()
-    var shortenedUrl = shortenedMap[originalUrl] || null
+    var phishUrl = buildPhishURL(rid)
 
     var html = '<div style="padding:10px 20px;">'
     html += '<strong>' + escapeHtml(name) + '</strong> &mdash; Result ID: <code>' + escapeHtml(rid) + '</code><br>'
     html += '<div style="margin:8px 0 12px; font-size:12px; font-family:monospace; background:#f5f5f5; border:1px solid #ddd; border-radius:4px; padding:8px;">'
-    html += '<div><span class="text-muted">Original:&nbsp;&nbsp;</span><a href="' + escapeHtml(originalUrl) + '" target="_blank">' + escapeHtml(originalUrl) + '</a></div>'
-    if (shortenedUrl) {
-        html += '<div style="margin-top:4px;"><span class="text-muted">Encurtado: </span><a href="' + escapeHtml(shortenedUrl) + '" target="_blank" style="color:#27ae60;font-weight:bold;">' + escapeHtml(shortenedUrl) + '</a></div>'
-    } else {
-        html += '<div style="margin-top:4px;"><span class="text-muted">Encurtado: </span><em class="text-muted">não encurtado ainda</em></div>'
-    }
+    html += '<div><span class="text-muted">Link:&nbsp;&nbsp;</span><a href="' + escapeHtml(phishUrl) + '" target="_blank">' + escapeHtml(phishUrl) + '</a></div>'
     html += '</div>'
 
     var hasEvents = false
